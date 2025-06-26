@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solar Panel Simulation</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.min.js"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.13"></script>
+  <style>
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    .pulse-animation {
+      animation: pulse 2s infinite;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-green-50 min-h-screen transition-colors duration-300 font-sans">
+  <div id="root"></div>
+  <div id="error" className="hidden text-red-600 text-center p-4"></div>
+  <script type="text/babel">
+    console.log('Starting Solar Panel Simulation UI');
+
+    if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error').textContent = 'Error: Failed to load React. Please check your internet connection and refresh.';
+      console.error('React or ReactDOM not loaded');
+    } else {
+      const { useState, useEffect, useRef, Component } = React;
+
+      class ErrorBoundary extends Component {
+        state = { hasError: false };
+        static getDerivedStateFromError(error) {
+          return { hasError: true };
+        }
+        componentDidCatch(error, info) {
+          console.error('React rendering error:', error, info);
+        }
+        render() {
+          if (this.state.hasError) {
+            return (
+              <div className="text-red-600 text-center p-4">
+                Something went wrong rendering the UI. Check the console for details.
+              </div>
+            );
+          }
+          return this.props.children;
+        }
+      }
+
+      const SolarSimulation = () => {
+        const [efficiency, setEfficiency] = useState(20);
+        const [area, setArea] = useState(1.0);
+        const [cloudCover, setCloudCover] = useState(30);
+        const [numPanels, setNumPanels] = useState(1);
+        const [batteryCapacity, setBatteryCapacity] = useState(10);
+        const [degradation, setDegradation] = useState(0);
+        const [dailyConsumption, setDailyConsumption] = useState(10);
+        const [darkMode, setDarkMode] = useState(false);
+        const [energyData, setEnergyData] = useState([]);
+        const [batteryData, setBatteryData] = useState([]);
+        const [currentHour, setCurrentHour] = useState(0);
+        const [showTable, setShowTable] = useState(false);
+        const chartRef = useRef(null);
+        const chartInstanceRef = useRef(null);
+
+        // Simulate solar panel system
+        const runSimulation = () => {
+          console.log('Running simulation:', { efficiency, area, cloudCover, numPanels, batteryCapacity, degradation });
+          const energy = [];
+          const battery = [];
+          let batteryCharge = 0;
+          for (let hour = 0; hour < 24; hour++) {
+            // Dynamic temperature as in Python code
+            const temperature = 20 + 10 * Math.sin((hour - 6) * Math.PI / 12) + (Math.random() * 4 - 2);
+            const sunlight = Math.max(0, Math.sin((hour - 6) * Math.PI / 12)) * 1000 * (1 - cloudCover / 100);
+            const tempEffect = temperature > 25 ? 1 - 0.005 * (temperature - 25) : 1;
+            const degradationEffect = 1 - degradation / 100;
+            const energyOutput = (sunlight * (efficiency / 100) * tempEffect * degradationEffect * area * numPanels) / 1000;
+            batteryCharge = Math.min(batteryCapacity, batteryCharge + energyOutput);
+            energy.push({
+              hour,
+              energy: energyOutput.toFixed(3),
+              sunlight: (sunlight / 1000).toFixed(3),
+              temperature: temperature.toFixed(1)
+            });
+            battery.push({ hour, charge: batteryCharge.toFixed(3) });
+          }
+          setEnergyData(energy);
+          setBatteryData(battery);
+        };
+
+        // Real-time animation
+        useEffect(() => {
+          runSimulation();
+          const interval = setInterval(() => {
+            setCurrentHour((prev) => (prev + 1) % 24);
+          }, 1000);
+          return () => clearInterval(interval);
+        }, [efficiency, area, cloudCover, numPanels, batteryCapacity, degradation]);
+
+        // Render chart
+        useEffect(() => {
+          if (chartRef.current && energyData.length > 0) {
+            if (chartInstanceRef.current) {
+              chartInstanceRef.current.destroy();
+            }
+            try {
+              const ctx = chartRef.current.getContext('2d');
+              chartInstanceRef.current = new Chart(ctx, {
+                type: 'line',
+                data: {
+                  labels: energyData.map(d => `${d.hour}:00`),
+                  datasets: [
+                    {
+                      label: 'Energy Output (kWh)',
+                      data: energyData.map(d => d.energy),
+                      borderColor: '#10b981',
+                      backgroundColor: 'rgba(16, 185, 129, 0.3)',
+                      fill: true,
+                      tension: 0.4,
+                      pointRadius: 4,
+                      pointHoverRadius: 8,
+                    },
+                    {
+                      label: 'Battery Charge (kWh)',
+                      data: batteryData.map(d => d.charge),
+                      borderColor: '#3b82f6',
+                      backgroundColor: 'rgba(59, 130, 246, 0.3)',
+                      fill: true,
+                      tension: 0.4,
+                      pointRadius: 4,
+                      pointHoverRadius: 8,
+                    },
+                    {
+                      label: 'Sunlight Intensity (kW/m²)',
+                      data: energyData.map(d => d.sunlight),
+                      borderColor: '#f59e0b',
+                      backgroundColor: 'rgba(245, 158, 11, 0.3)',
+                      fill: false,
+                      tension: 0.4,
+                      pointRadius: 4,
+                      pointHoverRadius: 8,
+                    },
+                    {
+                      label: 'Temperature (°C)',
+                      data: energyData.map(d => d.temperature),
+                      borderColor: '#ef4444',
+                      backgroundColor: 'rgba(239, 68, 68, 0.3)',
+                      fill: false,
+                      tension: 0.4,
+                      pointRadius: 4,
+                      pointHoverRadius: 8,
+                    },
+                  ],
+                },
+                options: {
+                  responsive: true,
+                  plugins: {
+                    tooltip: {
+                      mode: 'index',
+                      intersect: false,
+                      backgroundColor: darkMode ? '#1f2937' : '#ffffff',
+                      titleColor: darkMode ? '#ffffff' : '#1f2937',
+                      bodyColor: darkMode ? '#ffffff' : '#1f2937',
+                    },
+                    legend: {
+                      labels: { color: darkMode ? '#ffffff' : '#1f2937' },
+                    },
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      title: { display: true, text: 'Value', color: darkMode ? '#ffffff' : '#1f2937' },
+                      grid: { color: darkMode ? '#374151' : '#e5e7eb' },
+                      ticks: { color: darkMode ? '#ffffff' : '#1f2937' },
+                    },
+                    x: {
+                      title: { display: true, text: 'Time (Hour)', color: darkMode ? '#ffffff' : '#1f2937' },
+                      grid: { color: darkMode ? '#374151' : '#e5e7eb' },
+                      ticks: { color: darkMode ? '#ffffff' : '#1f2937' },
+                    },
+                  },
+                  animation: {
+                    duration: 1000,
+                    easing: 'easeInOutQuad',
+                  },
+                },
+              });
+              console.log('Chart rendered successfully');
+            } catch (error) {
+              console.error('Chart rendering error:', error);
+            }
+          }
+        }, [energyData, batteryData, darkMode]);
+
+        // CSV Export
+        const exportCSV = () => {
+          const headers = ['Hour', 'Energy (kWh)', 'Battery Charge (kWh)', 'Sunlight (kW/m²)', 'Temperature (°C)'];
+          const rows = energyData.map((d, i) => [
+            d.hour,
+            d.energy,
+            batteryData[i].charge,
+            d.sunlight,
+            d.temperature,
+          ]);
+          const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.join(',')),
+          ].join('\n');
+          const blob = new Blob([csvContent], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'solar_simulation.csv';
+          a.click();
+          URL.revokeObjectURL(url);
+        };
+
+        const totalEnergy = energyData.reduce((sum, d) => sum + parseFloat(d.energy), 0).toFixed(3);
+        const currentBattery = batteryData[currentHour]?.charge || '0.000';
+        const netEnergy = (totalEnergy - dailyConsumption).toFixed(3);
+        const effectiveEfficiency = (efficiency * (energyData[currentHour]?.temperature > 25 ? 1 - 0.005 * (energyData[currentHour]?.temperature - 25) : 1) * (1 - degradation / 100)).toFixed(1);
+
+        return (
+          <div className={`flex min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-blue-50 to-green-50 text-gray-900'}`}>
+            {/* Sidebar */}
+            <div className={`w-80 ${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 shadow-2xl fixed h-full overflow-y-auto transition-colors duration-300`}>
+              <h2 className="text-2xl font-semibold mb-6">Simulation Controls</h2>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Efficiency ({efficiency}%)</label>
+                  <input
+                    type="range"
+                    min="10"
+                    max="30"
+                    value={efficiency}
+                    onChange={(e) => setEfficiency(e.target.value)}
+                    className="w-full h-2 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Panel Area ({area} m²)</label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="5"
+                    step="0.1"
+                    value={area}
+                    onChange={(e) => setArea(e.target.value)}
+                    className="w-full h-2 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Cloud Cover ({cloudCover}%)</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="80"
+                    value={cloudCover}
+                    onChange={(e) => setCloudCover(e.target.value)}
+                    className="w-full h-2 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Number of Panels ({numPanels})</label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={numPanels}
+                    onChange={(e) => setNumPanels(e.target.value)}
+                    className="w-full h-2 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Battery Capacity ({batteryCapacity} kWh)</label>
+                  <input
+                    type="range"
+                    min="5"
+                    max="50"
+                    value={batteryCapacity}
+                    onChange={(e) => setBatteryCapacity(e.target.value)}
+                    className="w-full h-2 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Panel Degradation ({degradation}%)</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="20"
+                    value={degradation}
+                    onChange={(e) => setDegradation(e.target.value)}
+                    className="w-full h-2 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Daily Consumption ({dailyConsumption} kWh)</label>
+                  <input
+                    type="range"
+                    min="5"
+                    max="50"
+                    value={dailyConsumption}
+                    onChange={(e) => setDailyConsumption(e.target.value)}
+                    className="w-full h-2 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="block text-sm font-medium">Dark Mode</label>
+                  <input
+                    type="checkbox"
+                    checked={darkMode}
+                    onChange={() => setDarkMode(!darkMode)}
+                    className="h-5 w-5 text-green-600 rounded"
+                  />
+                </div>
+                <button
+                  onClick={exportCSV}
+                  className="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white py-2 rounded-lg hover:from-green-600 hover:to-blue-600 transition duration-200"
+                >
+                  Export Data as CSV
+                </button>
+              </div>
+            </div>
+
+            {/* Main Content */}
+            <div className="ml-80 flex-1 p-8">
+              <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-green-500 to-blue-500 text-transparent bg-clip-text pulse-animation">
+                Solar Panel Simulation
+              </h1>
+
+              {/* Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl text-center shadow-lg transform hover:scale-105 transition duration-200`}>
+                  <p className="text-sm font-medium">Total Energy</p>
+                  <p className="text-2xl font-bold text-green-600">{totalEnergy} kWh</p>
+                </div>
+                <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl text-center shadow-lg transform hover:scale-105 transition duration-200`}>
+                  <p className="text-sm font-medium">Battery Charge</p>
+                  <p className="text-2xl font-bold text-green-600">{currentBattery} kWh</p>
+                </div>
+                <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl text-center shadow-lg transform hover:scale-105 transition duration-200`}>
+                  <p className="text-sm font-medium">Net Energy</p>
+                  <p className="text-2xl font-bold ${netEnergy >= 0 ? 'text-green-600' : 'text-red-600'}">{netEnergy} kWh</p>
+                </div>
+                <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl text-center shadow-lg transform hover:scale-105 transition duration-200`}>
+                  <p className="text-sm font-medium">Effective Efficiency</p>
+                  <p className="text-2xl font-bold text-green-600">{effectiveEfficiency}%</p>
+                </div>
+              </div>
+
+              {/* Chart/Table Toggle */}
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={() => setShowTable(!showTable)}
+                  className="bg-gradient-to-r from-green-500 to-blue-500 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-blue-600 transition duration-200"
+                >
+                  {showTable ? 'Show Chart' : 'Show Table'}
+                </button>
+              </div>
+
+              {/* Chart/Table */}
+              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg`}>
+                {showTable ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className={`${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                          <th className="p-3 text-left">Hour</th>
+                          <th className="p-3 text-left">Energy (kWh)</th>
+                          <th className="p-3 text-left">Battery (kWh)</th>
+                          <th className="p-3 text-left">Sunlight (kW/m²)</th>
+                          <th className="p-3 text-left">Temperature (°C)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {energyData.map((d, i) => (
+                          <tr key={d.hour} className={`${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}`}>
+                            <td className="p-3">{d.hour}:00</td>
+                            <td className="p-3">{d.energy}</td>
+                            <td className="p-3">{batteryData[i].charge}</td>
+                            <td className="p-3">{d.sunlight}</td>
+                            <td className="p-3">{d.temperature}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <canvas ref={chartRef}></canvas>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      try {
+        ReactDOM.render(
+          <ErrorBoundary>
+            <SolarSimulation />
+          </ErrorBoundary>,
+          document.getElementById('root')
+        );
+        console.log('React app rendered successfully');
+      } catch (error) {
+        console.error('Error rendering React app:', error);
+        document.getElementById('error').classList.remove('hidden');
+        document.getElementById('error').textContent = 'Error: Failed to render the UI. Check the console for details.';
+      }
+    }
+  </script>
+</body>
+</html>
