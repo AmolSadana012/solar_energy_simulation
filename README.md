@@ -1,5 +1,7 @@
 # Solar Energy Simulation with Battery Optimization:
 
+![License: Non-Commercial Use Only](https://img.shields.io/badge/license-Non--Commercial-orange)
+
 This project simulates a solar panel system with a rechargeable battery to explore how energy is generated, stored, and consumed throughout the day. It uses SimPy (a discrete-event simulation library in Python) to model real-world conditions and Matplotlib to visualize energy dynamics.
 
 ## Tech Stack:
